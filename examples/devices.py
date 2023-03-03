@@ -72,8 +72,7 @@ for i in tuyadevices:
     else:
         try:
             d = tinytuya.OutletDevice(i['id'], ip, i['key'])
-            if ver == "3.3":
-                d.set_version(3.3)
+            d.set_version(float(ver)) # IMPORTANT to always set version 
             data = d.status()
             if 'dps' in data:
                 item['dps'] = data
@@ -99,8 +98,4 @@ for i in tuyadevices:
 # for loop
 
 # Save polling data snapshot.json
-current = {'timestamp' : time.time(), 'devices' : polling}
-output = json.dumps(current, indent=4) 
-print(bold + "\n>> " + normal + "Saving device snapshot data to " + SNAPSHOTFILE)
-with open(SNAPSHOTFILE, "w") as outfile:
-    outfile.write(output)
+tinytuya.scanner.save_snapshotfile( SNAPSHOTFILE, polling, None )

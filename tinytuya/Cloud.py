@@ -12,15 +12,22 @@
  Functions
     Cloud
         setregion(apiRegion)
+        cloudrequest(url, action=[POST if post else GET], post={}, query={})
         getdevices(verbose=False)
         getstatus(deviceid)
         getfunctions(deviceid)
         getproperties(deviceid)
         getdps(deviceid)
         sendcommand(deviceid, commands)
-"""
+        getconnectstatus(deviceid)
+        getdevicelog(deviceid, start=[now - 1 day], end=[now], evtype="1,2,3,4,5,6,7,8,9,10", size=100, params={})
+          -> when start or end are negative, they are the number of days before "right now"
+             i.e. "start=-1" is 1 day ago, "start=-7" is 7 days ago
 
-from .core import *
+ Reference
+    * https://developer.tuya.com/en/docs/cloud/device-connection-service?id=Kb0b8geg6o761
+
+"""
 
 import hashlib
 import hmac
@@ -28,19 +35,19 @@ import json
 import time
 import requests
 
+from .core import * # pylint: disable=W0401, W0614
+
 ########################################################
 #             Cloud Classes and Functions
 ########################################################
 
 class Cloud(object):
-    def __init__(self, apiRegion=None, apiKey=None, apiSecret=None, apiDeviceID=None, new_sign_algorithm=True):
+    def __init__(self, apiRegion=None, apiKey=None, apiSecret=None, apiDeviceID=None, new_sign_algorithm=True, initial_token=None):
         """
         Tuya Cloud IoT Platform Access
 
         Args:
-            dev_id (str): The device id.
-            address (str): The network address.
-            local_key (str, optional): The encryption key. Defaults to None.
+            initial_token: The auth token from a previous run.  It will be refreshed if it has expired
 
         Playload Construction - Header Data:
             Parameter 	  Type    Required	Description
@@ -72,10 +79,12 @@ class Cloud(object):
         self.apiDeviceID = apiDeviceID
         self.urlhost = ''
         self.uid = None     # Tuya Cloud User ID
-        self.token = None
+        self.token = initial_token
+        self.error = None
         self.new_sign_algorithm = new_sign_algorithm
+        self.server_time_offset = 0
 
-        if apiKey is None or apiSecret is None:
+        if (not apiKey) or (not apiSecret):
             try:
                 # Load defaults from config file if available
                 config = {}
@@ -86,14 +95,18 @@ class Cloud(object):
                     self.apiSecret = config['apiSecret']
                     self.apiDeviceID = config['apiDeviceID']
             except:
-                return error_json(
+                self.error = error_json(
                     ERR_CLOUDKEY,
                     "Tuya Cloud Key and Secret required",
                 )
+                #return self.error
+                raise TypeError('Tuya Cloud Key and Secret required') # pylint: disable=W0707
 
         self.setregion(apiRegion)
-        # Attempt to connect to cloud and get token
-        self.token = self._gettoken()
+
+        if not self.token:
+            # Attempt to connect to cloud and get token
+            self._gettoken()
 
     def setregion(self, apiRegion=None):
         # Set hostname based on apiRegion
@@ -112,19 +125,49 @@ class Cloud(object):
         if self.apiRegion == "in":
             self.urlhost = "openapi.tuyain.com"      # India Datacenter
 
-    def _tuyaplatform(self, uri, action='GET', post=None, ver='v1.0', recursive=False):
+    def _tuyaplatform(self, uri, action='GET', post=None, ver='v1.0', recursive=False, query=None):
         """
         Handle GET and POST requests to Tuya Cloud
         """
         # Build URL and Header
-        url = "https://%s/%s/%s" % (self.urlhost, ver, uri)
+        if ver:
+            url = "https://%s/%s/%s" % (self.urlhost, ver, uri)
+        elif uri[0] == '/':
+            url = "https://%s%s" % (self.urlhost, uri)
+        else:
+            url = "https://%s/%s" % (self.urlhost, uri)
         headers = {}
         body = {}
-        if action == 'POST':
+        sign_url = url
+        if post is not None:
             body = json.dumps(post)
             headers['Content-type'] = 'application/json'
-        else:
-            action = 'GET'
+        if action not in ('GET', 'POST', 'PUT', 'DELETE'):
+            action = 'POST' if post else 'GET'
+        if query:
+            # note: signature must be calculated before URL-encoding!
+            if type(query) == str:
+                # if it's a string then assume no url-encoding is needed
+                if query[0] == '?':
+                    url += query
+                else:
+                    url += '?' + query
+                sign_url = url
+            else:
+                # dicts are unsorted, however Tuya requires the keys to be in alphabetical order for signing
+                #  as per https://developer.tuya.com/en/docs/iot/singnature?id=Ka43a5mtx1gsc
+                if type(query) == dict:
+                    sorted_query = []
+                    for k in sorted(query.keys()):
+                        sorted_query.append( (k, query[k]) )
+                    query = sorted_query
+                    # calculate signature without url-encoding
+                    sign_url += '?' + '&'.join( [str(x[0]) + '=' + str(x[1]) for x in query] )
+                    req = requests.Request(action, url, params=query).prepare()
+                    url = req.url
+                else:
+                    req = requests.Request(action, url, params=query).prepare()
+                    sign_url = url = req.url
         now = int(time.time()*1000)
         headers = dict(list(headers.items()) + [('Signature-Headers', ":".join(headers.keys()))]) if headers else {}
         if self.token is None:
@@ -140,7 +183,7 @@ class Cloud(object):
                 ''.join(['%s:%s\n'%(key, headers[key])                                   # Headers
                             for key in headers.get("Signature-Headers", "").split(":")
                             if key in headers]) + '\n' +
-                '/' + url.split('//', 1)[-1].split('/', 1)[-1])
+                '/' + sign_url.split('//', 1)[-1].split('/', 1)[-1])
         # Sign Payload
         signature = hmac.new(
             self.apiSecret.encode('utf-8'),
@@ -161,7 +204,7 @@ class Cloud(object):
         if action == 'GET':
             response = requests.get(url, headers=headers)
             log.debug(
-                "GET: response code=%d text=%s token=%s", response.status_code, response.text, self.token
+                "GET: URL=%s HEADERS=%s response code=%d text=%s token=%s", url, headers, response.status_code, response.text, self.token
             )
         else:
             log.debug(
@@ -175,8 +218,8 @@ class Cloud(object):
                 log.debug("Failed 2nd attempt to renew token - Aborting")
                 return None
             log.debug("Token Expired - Try to renew")
-            token = self._gettoken()
-            if "err" in token:
+            self._gettoken()
+            if not self.token:
                 log.debug("Failed to renew token")
                 return None
             else:
@@ -184,14 +227,16 @@ class Cloud(object):
 
         try:
             response_dict = json.loads(response.content.decode())
+            self.error = None
         except:
             try:
                 response_dict = json.loads(response.content)
             except:
-                return error_json(
+                self.error = error_json(
                     ERR_CLOUDKEY,
                     "Cloud _tuyaplatform() invalid response: %r" % response.content,
                 )
+                return self.error
         # Check to see if token is expired
         return response_dict
 
@@ -200,18 +245,27 @@ class Cloud(object):
         self.token = None
         response_dict = self._tuyaplatform('token?grant_type=1')
 
-        if not response_dict['success']:
-            return error_json(
+        if not response_dict or 'success' not in response_dict or not response_dict['success']:
+            self.error = error_json(
                 ERR_CLOUDTOKEN,
                 "Cloud _gettoken() failed: %r" % response_dict['msg'],
             )
+            return self.error
+
+        if 't' in response_dict:
+            # round it to 2 minutes to try and factor out any processing delays
+            self.server_time_offset = round( ((response_dict['t'] / 1000.0) - time.time()) / 120 )
+            self.server_time_offset *= 120
+            log.debug("server_time_offset: %r", self.server_time_offset)
 
         self.token = response_dict['result']['access_token']
         return self.token
 
     def _getuid(self, deviceid=None):
         # Get user ID (UID) for deviceid
-        if deviceid is None:
+        if not self.token:
+            return self.error
+        if not deviceid:
             return error_json(
                 ERR_PARAMS,
                 "_getuid() requires deviceID parameter"
@@ -220,12 +274,36 @@ class Cloud(object):
         response_dict = self._tuyaplatform(uri)
 
         if not response_dict['success']:
+            if 'code' not in response_dict:
+                response_dict['code'] = -1
+            if 'msg' not in response_dict:
+                response_dict['msg'] = 'Unknown Error'
             log.debug(
                 "Error from Tuya Cloud: %r", response_dict['msg'],
             )
-            return None
+            return error_json(
+                ERR_CLOUD,
+                "Error from Tuya Cloud: Code %r: %r" % (response_dict['code'], response_dict['msg'])
+            )
+
         uid = response_dict['result']['uid']
         return uid
+
+    def cloudrequest(self, url, action=None, post=None, query=None):
+        """
+        Make a generic cloud request and return the results.
+
+        Args:
+          url:    Required.  The URL to fetch, i.e. "/v1.0/devices/0011223344556677/logs"
+          action: Optional.  GET, POST, DELETE, or PUT.  Defaults to GET, unless POST data is supplied.
+          post:   Optional.  POST body data.  Will be fed into json.dumps() before posting.
+          query:  Optional.  A dict containing query string key/value pairs.
+        """
+        if not self.token:
+            return self.error
+        if action is None:
+            action = 'POST' if post else 'GET'
+        return self._tuyaplatform(url, action=action, post=post, ver=None, query=query)
 
     def getdevices(self, verbose=False):
         """
@@ -237,39 +315,65 @@ class Cloud(object):
         if uid is None:
             return error_json(
                 ERR_CLOUD,
-                "Unable to get device list"
+                "Unable to get uid for device list"
             )
+        elif isinstance( uid, dict):
+            return uid
+
         # Use UID to get list of all Devices for User
         uri = 'users/%s/devices' % uid
         json_data = self._tuyaplatform(uri)
 
-        # Use Device ID to get MAC addresses
-        uri = 'devices/factory-infos?device_ids=%s' % (",".join(i['id'] for i in json_data['result']))
-        json_mac_data = self._tuyaplatform(uri)
-
         if verbose:
             return json_data
+        elif not json_data or 'result' not in json_data:
+            return error_json(
+                ERR_CLOUD,
+                "Unable to get device list"
+            )
         else:
             # Filter to only Name, ID and Key
-            tuyadevices = []
-            for i in json_data['result']:
-                item = {}
-                item['name'] = i['name'].strip()
-                item['id'] = i['id']
-                item['key'] = i['local_key']
-                if 'mac' in i:
-                    item['mac'] = i['mac']
-                else:
-                    try:
-                        item['mac'] = next((m['mac'] for m in json_mac_data['result'] if m['id'] == i['id']), "N/A")
-                    except:
-                        pass
-                tuyadevices.append(item)
-                
-            return tuyadevices
+            return self.filter_devices( json_data['result'] )
+
+    def filter_devices( self, devs, ip_list=None ):
+        # Use Device ID to get MAC addresses
+        uri = 'devices/factory-infos?device_ids=%s' % (",".join(i['id'] for i in devs))
+        json_mac_data = self._tuyaplatform(uri)
+
+        tuyadevices = []
+        icon_host = 'https://images.' + self.urlhost.split( '.', 1 )[1] + '/'
+
+        for i in devs:
+            item = {}
+            item['name'] = i['name'].strip()
+            item['id'] = i['id']
+            item['key'] = i['local_key']
+            if 'mac' in i:
+                item['mac'] = i['mac']
+            else:
+                try:
+                    item['mac'] = next((m['mac'] for m in json_mac_data['result'] if m['id'] == i['id']), "")
+                except:
+                    pass
+
+            if ip_list and 'mac' in item and item['mac'] in ip_list:
+                item['ip'] = ip_list[item['mac']]
+
+            for k in DEVICEFILE_SAVE_VALUES:
+                if k in i:
+                    if k == 'icon':
+                        item[k] = icon_host + i[k]
+                    else:
+                        item[k] = i[k]
+
+            tuyadevices.append(item)
+
+        return tuyadevices
 
     def _getdevice(self, param='status', deviceid=None):
-        if deviceid is None:
+        if not self.token:
+            return self.error
+        if not deviceid:
             return error_json(
                 ERR_PARAMS,
                 "Missing DeviceID Parameter"
@@ -305,7 +409,9 @@ class Cloud(object):
         """
         Get the specifications including DPS IDs of the device.
         """
-        if deviceid is None:
+        if not self.token:
+            return self.error
+        if not deviceid:
             return error_json(
                 ERR_PARAMS,
                 "Missing DeviceID Parameter"
@@ -323,10 +429,12 @@ class Cloud(object):
         """
         Send a command to the device
         """
-        if deviceid is None or commands is None:
+        if not self.token:
+            return self.error
+        if (not deviceid) or (not commands):
             return error_json(
                 ERR_PARAMS,
-                "Missing DeviceID and Command Parameters"
+                "Missing DeviceID and/or Command Parameters"
             )
         uri = 'iot-03/devices/%s/commands' % (deviceid)
         response_dict = self._tuyaplatform(uri,action='POST',post=commands)
@@ -336,12 +444,14 @@ class Cloud(object):
                 "Error from Tuya Cloud: %r", response_dict['msg'],
             )
         return response_dict
-       
+
     def getconnectstatus(self, deviceid=None):
         """
-        Get the device Cloud connect status. 
+        Get the device Cloud connect status.
         """
-        if deviceid is None:
+        if not self.token:
+            return self.error
+        if not deviceid:
             return error_json(
                 ERR_PARAMS,
                 "Missing DeviceID Parameter"
@@ -350,7 +460,141 @@ class Cloud(object):
         response_dict = self._tuyaplatform(uri, ver='v1.0')
 
         if not response_dict['success']:
-            log.debug(
-                    "Error from Tuya Cloud: %r" % response_dict['msg'],
-            )
+            log.debug("Error from Tuya Cloud: %r", response_dict['msg'])
         return(response_dict["result"]["online"])
+
+    def getdevicelog(self, deviceid=None, start=None, end=None, evtype=None, size=0, max_fetches=50, start_row_key=None, params=None):
+        """
+        Get the logs for a device.
+        https://developer.tuya.com/en/docs/cloud/0a30fc557f?id=Ka7kjybdo0jse
+
+        Note: The cloud only returns logs for DPs in the "official" DPS list.
+          If the device specifications are wrong then not all logs will be returned!
+          This is a limitation of Tuya's servers and there is nothing we can do about it.
+
+        Args:
+          devid:  Required.  Device ID
+          start:  Optional.  Get logs starting from this time.  Defaults to yesterday
+          end:    Optional.  Get logs until this time.  Defaults to the current time
+          evtype: Optional.  Limit to events of this type.  1 = Online, 7 = DP Reports.  Defaults to all events.
+          size:   Optional.  Target number of log entries to return.  Defaults to 0 (all, up to max_fetches*100).
+                               Actual number of log entries returned will be between "0" and "size * 2 - 1"
+          max_fetches: Optional. Maximum number of queries to send to the server.  Tuya's server has a hard limit
+                               of 100 records per query, so the maximum number of logs returned is "max_fetches * 100"
+          start_row_key: Optional. The "next_row_key" from a previous run.
+          params: Optional.  Additional values to include in the query string.  Defaults to an empty dict.
+
+        Returns:
+          Response from server
+        """
+        if not deviceid:
+            return error_json(
+                ERR_PARAMS,
+                "Missing DeviceID Parameter"
+            )
+
+        # server expects times as unixtime * 1000
+        if not end:
+            end = int((time.time() + self.server_time_offset) * 1000)
+        elif end < 0:
+            end = int(((time.time() + self.server_time_offset) + (end * 86400) ) * 1000)
+        else:
+            end = Cloud.format_timestamp( end )
+        if not start:
+            start = end - (86400*1000)
+        elif start < 0:
+            start = int(((time.time() + self.server_time_offset) + (start * 86400) ) * 1000)
+        else:
+            start = Cloud.format_timestamp( start )
+        if start > end:
+            tmp = start
+            start = end
+            end = tmp
+        if not evtype:
+            # get them all by default
+            # 1 = device online, 7 = DP report
+            evtype = '1,2,3,4,5,6,7,8,9,10'
+        elif type(evtype) == str:
+            pass
+        elif type(evtype) == bytes:
+            evtype = evtype.decode('utf8')
+        elif type(evtype) == int:
+            evtype = str(evtype)
+        elif type(evtype) == list or type(evtype) == tuple:
+            evtype = ','.join( [str(i) for i in evtype] )
+        else:
+            raise ValueError( "Unhandled 'evtype' type %s - %r" % (type(evtype), evtype) )
+        want_size = size
+        if not size:
+            size = 100
+        elif size > 100:
+            size = 100
+            #if (want_size / size) * 2 > max_fetches:
+            #    max_fetches = round( (want_size / size) * 2 ) + 1
+        if not max_fetches or max_fetches < 1:
+            max_fetches = 50
+        params = {} if type(params) != dict else params.copy()
+        if 'start_time' not in params:
+            params['start_time'] = start
+        if 'end_time' not in params:
+            params['end_time'] = end
+        if 'type' not in params:
+            params['type'] = evtype
+        if 'size' not in params:
+            params['size'] = size
+        if 'query_type' not in params:
+            params['query_type'] = 1
+        if start_row_key:
+            params['start_row_key'] = start_row_key
+
+        ret = self.cloudrequest( '/v1.0/devices/%s/logs' % deviceid, query=params)
+        max_fetches -= 1
+        fetches = 1
+
+        if ret and 'result' in ret:
+            # ret['result'] is a dict so the 'result' below will be a reference, not a copy
+            result = ret['result']
+            again = True
+            next_row_key = ''
+            while (
+                    again and max_fetches and
+                    'logs' in result and
+                    'has_next' in result and result['has_next'] and
+                    (not want_size or len(result['logs']) < size) and
+                    'next_row_key' in result and result['next_row_key'] and next_row_key != result['next_row_key']
+            ):
+                again =	False
+                max_fetches -= 1
+                fetches += 1
+                params['start_row_key'] = result['next_row_key']
+                next_row_key = result['next_row_key']
+                result['next_row_key'] = None
+                result['has_next'] = False
+                res = self.cloudrequest( '/v1.0/devices/%s/logs' % deviceid, query=params)
+                if res and 'result' in res:
+                    result2 = res['result']
+                    if 'logs' in result2:
+                        result['logs'] += result2['logs']
+                        again = True
+                    if 'has_next' in result2:
+                        result['has_next'] = result2['has_next']
+                    if 'next_row_key' in result2:
+                        result['next_row_key'] = result2['next_row_key']
+                else:
+                    break
+
+            ret['fetches'] = fetches
+
+        return ret
+
+    @staticmethod
+    def format_timestamp( ts ):
+        # converts a 10-digit unix timestamp to the 13-digit stamp the servers expect
+        if type(ts) != int:
+            if len(str(int(ts))) == 10:
+                ts = int( ts * 1000 )
+            else:
+                ts = int( ts )
+        elif len(str(ts)) == 10:
+            ts *= 1000
+        return ts

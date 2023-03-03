@@ -7,14 +7,15 @@
  For more information see https://github.com/jasonacox/tinytuya
 
  Local Control Classes
-    CoverDevice(dev_id, address, local_key=None, dev_type='default')
+    CoverDevice(...)
+        See OutletDevice() for constructor arguments
 
  Functions
     CoverDevice:
         open_cover(switch=1):
         close_cover(switch=1):
         stop_cover(switch=1):
-        
+
     Inherited
         json = status()                    # returns json payload
         set_version(version)               # 3.1 [default] or 3.3
@@ -37,7 +38,7 @@
         detect_available_dps()             # Return list of DPS available from device
         generate_payload(command, data)    # Generate TuyaMessage payload for command with data
         send(payload)                      # Send payload to device (do not wait for response)
-        receive()   
+        receive()
 """
 
 from .core import Device
@@ -45,11 +46,6 @@ from .core import Device
 class CoverDevice(Device):
     """
     Represents a Tuya based Smart Window Cover.
-
-    Args:
-        dev_id (str): The device id.
-        address (str): The network address.
-        local_key (str, optional): The encryption key. Defaults to None.
     """
 
     DPS_INDEX_MOVE = "1"
@@ -59,9 +55,6 @@ class CoverDevice(Device):
         "1": "movement",
         "101": "backlight",
     }
-
-    def __init__(self, dev_id, address, local_key="", dev_type="default"):
-        super(CoverDevice, self).__init__(dev_id, address, local_key, dev_type)
 
     def open_cover(self, switch=1, nowait=False):
         """Open the cover"""

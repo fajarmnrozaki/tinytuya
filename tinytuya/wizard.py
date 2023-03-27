@@ -25,6 +25,7 @@ Credits
 from __future__ import print_function
 import json
 from colorama import init
+from datetime import datetime
 import tinytuya
 
 # Backward compatibility for python2
@@ -47,7 +48,7 @@ DEFAULT_NETWORK = tinytuya.DEFAULT_NETWORK
 TCPTIMEOUT = tinytuya.TCPTIMEOUT    # Seconds to wait for socket open for scanning
 TCPPORT = tinytuya.TCPPORT          # Tuya TCP Local Port
 
-def wizard(color=True, retries=None, forcescan=False, nocloud=False):
+def wizard(color=True, retries=None, forcescan=False, nocloud=False, quicklist=False):
     """
     TinyTuya Setup Wizard Tuya based WiFi smart devices
 
@@ -91,17 +92,20 @@ def wizard(color=True, retries=None, forcescan=False, nocloud=False):
     print('')
 
     if (config['apiKey'] != '' and config['apiSecret'] != '' and
-            config['apiRegion'] != '' and config['apiDeviceID'] != ''):
+            config['apiRegion'] != ''):
         needconfigs = False
+        apiDeviceID = '<None>' if ('apiDeviceID' not in config or not config['apiDeviceID']) else config['apiDeviceID']
         print("    " + subbold + "Existing settings:" + dim +
               "\n        API Key=%s \n        Secret=%s\n        DeviceID=%s\n        Region=%s" %
-              (config['apiKey'], config['apiSecret'], config['apiDeviceID'],
+              (config['apiKey'], config['apiSecret'], apiDeviceID,
                config['apiRegion']))
         print('')
-        answer = input(subbold + '    Use existing credentials ' +
-                       normal + '(Y/n): ')
-        if answer[0:1].lower() == 'n':
+        if quicklist:
             needconfigs = True
+        else:
+            answer = input(subbold + '    Use existing credentials ' + normal + '(Y/n): ')
+            if answer[0:1].lower() == 'n':
+                needconfigs = True
 
     if needconfigs:
         # Ask user for config settings
@@ -111,7 +115,7 @@ def wizard(color=True, retries=None, forcescan=False, nocloud=False):
         config['apiSecret'] = input(subbold + "    Enter " + bold + "API Secret" + subbold +
                                     " from tuya.com: " + normal)
         config['apiDeviceID'] = input(subbold +
-                                      "    Enter " + bold + "any Device ID" + subbold +
+                                      "    (Optional) Enter " + bold + "any Device ID" + subbold +
                                       " currently registered in Tuya App (used to pull full list): " + normal)
         # TO DO - Determine apiRegion based on Device - for now, ask
         print("\n      " + subbold + "Region List" + dim +
@@ -155,16 +159,44 @@ def wizard(color=True, retries=None, forcescan=False, nocloud=False):
         # Filter to only Name, ID and Key, IP and mac-address
         tuyadevices = cloud.filter_devices( json_data['result'] )
 
+    # The device list does not (always) tell us which device is the parent for a sub-device, so we need to try and figure it out
+    # The only link between parent and child appears to be the local key
+
+    # Result:
+    # if 'parent' not in device: device is not a sub-device
+    # if 'parent' in device: device is a sub-device
+    #     if device['parent'] == '': device is a sub-device with an unknown parent
+    #     else: device['parent'] == device_id of parent
     for dev in tuyadevices:
-        if 'sub' in dev and dev['sub'] and 'key' in dev:
-            found = False
-            for parent in tuyadevices:
-                # the local key seems to be the only way of identifying the parent device
-                if 'key' in parent and 'id' in parent and dev['key'] == parent['key']:
-                    found = parent
-                    break
-            if found:
-                dev['parent'] = found['id']
+        if 'gateway_id' in dev:
+            # if the Cloud gave us the parent then just use that
+            if dev['gateway_id']:
+                dev['parent'] = dev['gateway_id']
+            del dev['gateway_id']
+
+        if 'sub' in dev and dev['sub']:
+            # no parent from cloud, try to find it via the local key
+            if 'parent' in dev and dev['parent']:
+                continue
+
+            # Set 'parent' to an empty string in case we can't find it
+            dev['parent'] = ''
+
+            # Only try to find the parent if the device has a local key
+            if 'key' in dev and dev['key']:
+                if 'id' not in dev:
+                    dev['id'] = ''
+                found = False
+                # Loop through all devices again to try and find a non-sub-device with the same local key
+                for parent in tuyadevices:
+                    if 'id' not in parent or parent['id'] == dev['id']:
+                        continue
+                    # Check for matching local keys and if device is not a sub-device then assume we found the parent
+                    if 'key' in parent and parent['key'] and dev['key'] == parent['key'] and ( 'sub' not in parent or not parent['sub']):
+                        found = parent
+                        break
+                if found:
+                    dev['parent'] = found['id']
 
     # Display device list
     print("\n\n" + bold + "Device Listing\n" + dim)
@@ -180,6 +212,13 @@ def wizard(color=True, retries=None, forcescan=False, nocloud=False):
     if not nocloud:
         # Save raw TuyaPlatform data to tuya-raw.json
         print(bold + "\n>> " + normal + "Saving raw TuyaPlatform response to " + RAWFILE)
+        json_data['file'] = {
+            'name': RAWFILE,
+            'description': 'Full raw list of Tuya devices.',
+            'account': cloud.apiKey,
+            'date': datetime.now().isoformat(),
+            'tinytuya': tinytuya.version
+        }
         try:
             with open(RAWFILE, "w") as outfile:
                 outfile.write(json.dumps(json_data, indent=4))
@@ -187,7 +226,10 @@ def wizard(color=True, retries=None, forcescan=False, nocloud=False):
             print('\n\n' + bold + 'Unable to save raw file' + dim )
 
     # Find out if we should poll all devices
-    answer = input(subbold + '\nPoll local devices? ' + normal + '(Y/n): ')
+    if quicklist:
+        answer = 'n'
+    else:
+        answer = input(subbold + '\nPoll local devices? ' + normal + '(Y/n): ')
     if answer.lower().find('n') < 0:
         result = tinytuya.scanner.poll_and_display( tuyadevices, color=color, scantime=retries, snapshot=True, forcescan=forcescan )
         iplist = {}

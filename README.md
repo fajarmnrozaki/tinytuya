@@ -11,7 +11,7 @@ Python module to interface with Tuya WiFi smart devices
 
 ## Description
 
-This python module controls and reads state of [Tuya](https://en.tuya.com/) compatible WiFi Smart Devices (Plugs, Switches, Lights, Window Covers, etc.) using the local area network (LAN) or the cloud (TuyaCloud API).  This is a compatible replacement for the `pytuya` PyPi module and currently supports Tuya Protocols 3.1, 3.2, 3.3, 3.4 and 3.5.
+This python module controls and reads state of [Tuya](https://en.tuya.com/) compatible WiFi Smart Devices (Plugs, Switches, Lights, Window Covers, etc.) using the local area network (LAN) or the cloud (TuyaCloud API).  This is a compatible replacement for the `pytuya` PyPI module and currently supports Tuya Protocols 3.1, 3.2, 3.3, 3.4 and 3.5.
 
 [Tuya](https://en.tuya.com/) devices are designed to communicate with the TuyaCloud but most also expose a local area network API.  This allows us to directly control the devices without using the cloud. This python module provides a way to poll status and issue commands to these devices.
 
@@ -45,14 +45,14 @@ Pip will attempt to install `pycryptodome`, `requests` and `colorama` if not alr
 ## Tuya Device Preparation
 
 Controlling and monitoring Tuya devices on your network requires the following:
-* *Address* - The network address (IPv4) of the device e.g. 10.0.1.100 
-* *Device ID* - The unique identifier for the Tuya device
-* *Version* - The Tuya protocol version used (3.1 or 3.3)
-* *Local_Key* - The security key required to access the Tuya device.
+* *Address* - Network address (IPv4) of the device e.g. 10.0.1.100
+* *Device ID* - Unique identifier for the Tuya device
+* *Version* - Tuya protocol version used (3.1, 3.2, 3.3, 3.4 or 3.5)
+* *Local_Key* - Security key needed to access the Tuya device. See [Setup Wizard](https://github.com/jasonacox/tinytuya#setup-wizard---getting-local-keys) to get these keys.
 
 ### Network Scanner
 
-TinyTuya has a built in network scanner that can be used to find Tuya Devices on your local network. It will show *Address*, *Device ID* and *Version* for each device.  
+TinyTuya has a built in network scanner that can be used to find Tuya Devices on your local network. It will show *Address*, *Device ID* and *Version* for each device. Your LAN and firewall will need to allow UDP (6666, 6667 and 7000) and TCP (6668) traffic.
 
 ```bash
 python -m tinytuya scan
@@ -97,7 +97,7 @@ TinyTuya has a built-in setup Wizard that uses the Tuya IoT Cloud Platform to ge
     * It will also ask for a sample *Device ID*.  Use one from step 2 above or found in the Device List on your Tuya IoT project.
     * The **Wizard** will poll the Tuya IoT Cloud Platform and print a JSON list of all your registered devices with the "name", "id" and "key" of your registered device(s). The "key"s in this list are the Devices' *Local_Key* you will use to access your device. 
     * In addition to displaying the list of devices, **Wizard** will create a local file `devices.json` that TinyTuya will use to provide additional details for scan results from `tinytuya.deviceScan()` or when running `python -m tinytuya scan`. The wizard also creates a local file `tuya-raw.json` that contains the entire payload from Tuya Cloud.
-    * The **Wizard** will ask if you want to poll all the devices. If you do, it will display the status of all devices on record and create a `snapshot.json` file with these results.
+    * The **Wizard** will ask if you want to poll all the devices. If you do, it will display the status of all devices on record and create a `snapshot.json` file with these results. Make sure your LAN and firewall permit UDP (6666, 6667 and 7000) and TCP (6668) traffic.
 
 Notes:
 * If you ever reset or re-pair your smart devices, the *Local_Key* will be reset and you will need to repeat the steps above.
@@ -110,16 +110,12 @@ After importing tinytuya, you create a device handle for the device you want to 
 ```python
 import tinytuya
 
-# Connect to Device - pytuya Method
-d = tinytuya.OutletDevice('DEVICE_ID_HERE', 'IP_ADDRESS_HERE', 'LOCAL_KEY_HERE')
-d.set_version(3.3)
-
-# And a Alternative Method for TinyTuya v1.7.0+
-# d = tinytuya.OutletDevice(
-#       dev_id='DEVICE_ID_HERE',
-#       address='IP_ADDRESS_HERE',
-#       local_key='LOCAL_KEY_HERE', 
-#       version=3.4)
+# Connect to Device
+d = tinytuya.OutletDevice(
+    dev_id='DEVICE_ID_HERE',
+    address='IP_ADDRESS_HERE',
+    local_key='LOCAL_KEY_HERE', 
+    version=3.3)
 
 # Get Status
 data = d.status() 
@@ -168,6 +164,7 @@ Functions:
   Device Commands:
 
     status()                           # Fetch status of device (json payload)
+    subdev_query(nowait)               # query sub-device list and online status (only for gateway devices)
     detect_available_dps()             # Return list of DPS available from device
     set_status(on, switch=1, nowait)   # Control status of the device to 'on' or 'off' (bool)
                                        # nowait (default False) True to send without waiting for response
@@ -217,7 +214,7 @@ Functions:
         getfunctions(deviceid)
         getproperties(deviceid)
         getdps(deviceid)
-        sendcommand(deviceid, commands)
+        sendcommand(deviceid, commands [, uri])
 	getconnectstatus(deviceid)
 	getdevicelog(deviceid, start=[now - 1 day], end=[now], evtype="1,2,3,4,5,6,7,8,9,10", size=0, max_fetches=50, start_row_key=None, params={})
 ```
@@ -476,8 +473,8 @@ By default, the scan functions will retry 15 times to find new devices. If you a
 * Tuya devices only allow one TCP connection at a time.  Make sure you close the TuyaSmart or SmartLife app before using *TinyTuya* to connect.
 * Some devices ship with older firmware that may not work with *TinyTuya*. If you're experiencing issues, please try updating the device's firmware in the official app.
 * The LOCAL KEY for Tuya devices will change every time a device is removed and re-added to the TuyaSmart app. If you're getting decrypt errors, try getting the key again as it might have changed. 
-* Devices running protocol version 3.1 (e.g. below Firmware 1.0.5) do not require a device *Local_Key* to read the status. Both 3.1 and 3.3 devices will require a device *Local_Key* to control the device.
-* Some devices with 22 character IDs will require additional setting to poll correctly - here is an example:
+* Devices running protocol version 3.1 (e.g. below Firmware 1.0.5) do not require a device *Local_Key* to read the status. All devices will require a device *Local_Key* to control the device.
+* Some devices with 22 character IDs will require additional setting to poll correctly. TinyTuya will attempt to detect and accomodate for this, but it can be specified directly:
   ```python
   a = tinytuya.OutletDevice('here_is_my_key', '192.168.x.x', 'secret_key_here', 'device22')
   a.set_version(3.3)

@@ -24,9 +24,28 @@ API Functions - The server listens for GET requests on local port 8888:
     /offline                        - List of registered devices that are offline
 ```
 
-Docker: docker pull [jasonacox/tinytuya](https://hub.docker.com/r/jasonacox/tinytuya)
-
 ## Quick Start
+
+This folder contains the `server.py` script that runs a simple python based webserver that makes the TinyTuya API calls.  Make sure the `device.json` file is the same directory where you start the server.
+
+```bash
+# Start Server - use Control-C to Stop
+python3 server.py
+
+# Start Server in Debug Mode
+python3 server.py -d
+```
+
+```
+TinyTuya (Server) [1.10.0t4]
+
+[Loaded devices.json - 39 devices]
+
+Starting threads...
+ - API and UI Endpoint on http://localhost:8888
+```
+
+## Docker Container
 
 1. Run the Server as a Docker Container listening on port 8888. Make sure your Tinytuya `devices.json` file is located in the directory where you start the container.
 
@@ -36,6 +55,7 @@ Docker: docker pull [jasonacox/tinytuya](https://hub.docker.com/r/jasonacox/tiny
     -p 8888:8888 \
     -p 6666:6666/udp \
     -p 6667:6667/udp \
+    -e DEBUG='no' \
     --mount type=bind,source="$(pwd)"/devices.json,target=/app/devices.json \
     --mount type=bind,source="$(pwd)"/tinytuya.json,target=/app/tinytuya.json \
     --name tinytuya \
@@ -77,19 +97,10 @@ docker stop tinytuya
 docker start tinytuya
 ```
 
-## Run without Docker
+## Control Panel
 
-This folder contains the `server.py` script that runs a simple python based webserver that makes the TinyTuya API calls.  Make sure the `device.json` file is the same directory where you start the server.
+The UI at http://localhost:8888 allows you to view and control the devices.
 
-```bash
-python3 server.py
-```
+![image](https://user-images.githubusercontent.com/836718/227736045-adb6e359-c0c1-44b9-b9ad-7e978f6b7b84.png)
 
-```
-TinyTuya (Server) [1.5.0]
-
-[Loaded devices.json - 34 devices]
-
-Starting threads...
- - API and UI Endpoint on http://localhost:8888
-```
+![image](https://user-images.githubusercontent.com/836718/227736057-e5392c13-554f-457e-9082-43c4d41a98ed.png)

@@ -1,5 +1,43 @@
 # RELEASE NOTES
 
+## v1.12.2 - Gateway/Sub-device Update
+
+* PyPI 1.12.2
+* Gateway/sub-device updates, payload_dict reworked, and `subdev_query()` added by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/308
+* Add [tools/pcap_parse.py](https://github.com/jasonacox/tinytuya/tree/master/tools) by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/311
+* [[Server](https://github.com/jasonacox/tinytuya/tree/master/server)] Formatted data into tables and added version information.
+
+## v1.12.1 - Cloud & Wizard Updates
+
+* PyPI 1.12.1
+* [[tinytuya.Cloud](https://github.com/jasonacox/tinytuya#tuya-cloud-access)] Added cloud `sendcommand()` parameter for URI by @Syrooo in https://github.com/jasonacox/tinytuya/pull/303
+* Wizard and [tinytuya.Cloud](https://github.com/jasonacox/tinytuya#tuya-cloud-access) - Fetch the device list a 2nd time to make sure we have the local key by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/306 - Updated internal `_get_all_devices()` and  `_update_device_list()`
+
+## v1.12.0 - Zigbee Gateway Updates
+
+* PyPI 1.12.0
+* Improve detect_available_dps() function by @nyok92 in https://github.com/jasonacox/tinytuya/pull/294
+* Tighten up parent device detection in the Wizard by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/296
+* Updates for Zigbee Gateway sub-device usage by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/298
+
+## v1.11.0 - Cloud Device Listing
+
+* PyPI 1.11.0
+* Simplification and cleanup of math functions in core and IRRemoteControlDevice by @gstein in https://github.com/jasonacox/tinytuya/pull/291
+* Rework Cloud device list fetching by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/289 includes new `tuya-raw.json` (backward compatible).
+
+Additional data in tuya-raw.json:
+
+```json
+    "file": {
+        "name": "tuya-raw.json",
+        "description": "Full raw list of Tuya devices.",
+        "account": "xxxxxxxxxxxxxxxxxxxx",
+        "date": "2023-03-04T19:50:08.879865",
+        "tinytuya": "1.11.0"
+    }
+```
+
 ## v1.10.3 - Cloud Updates
 
 * PyPI 1.10.3

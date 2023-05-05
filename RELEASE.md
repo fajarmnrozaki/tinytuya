@@ -1,5 +1,18 @@
 # RELEASE NOTES
 
+## v1.12.5 - Scanner Update
+
+* PyPI 1.12.5
+* Remove requirement for PyCryptodome in scanner (allows pyaes for devices < 3.5) by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/332
+* Added AES library details to debug output.
+* README update - Add link to Moonraker support project by @teejo75 in https://github.com/jasonacox/tinytuya/pull/335
+* Misc minor updates by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/336: Normalize ability/ablilty in scanner https://github.com/jasonacox/tinytuya/issues/333 - Fix examples/getstatus.py - Cloud device list and Content-Type update https://github.com/jasonacox/tinytuya/issues/324 - Rework examples/async_send_receive.py
+
+## v1.12.4 - Wizard Scan for ID
+
+* PyPI 1.12.4
+* Adds option allowing wizard to scan for a Device ID by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/331 - Related to Tuya IoT permission denied issue https://github.com/jasonacox/tinytuya/issues/330 and https://github.com/jasonacox/tinytuya/issues/323
+
 ## v1.12.3 - Fix Cloud Device List
 
 * PyPI 1.12.3

@@ -64,7 +64,7 @@ TinyTuya has a built-in setup Wizard that uses the Tuya IoT Cloud Platform to ge
 
 1. PAIR - Download the *Smart Life App* or *Tuya Smart App*, available for [iPhone](https://itunes.apple.com/us/app/smart-life-smart-living/id1115101477?mt=8) or [Android](https://play.google.com/store/apps/details?id=com.tuya.smartlife&hl=en). Pair all of your Tuya devices (this is important as you cannot access a device that has not been paired).
 
-2. SCAN - Run the TinyTuya scan to get a list of Tuya devices on your network. It will show device *Address*, *Device ID* and *Version* number (3.1 or 3.3):
+2. SCAN (Optional) - Run the TinyTuya scan to get a list of Tuya devices on your network. It will show device *Address*, *Device ID* and *Version* number (3.x):
     ```bash
     python -m tinytuya scan
     ```
@@ -94,7 +94,7 @@ TinyTuya has a built-in setup Wizard that uses the Tuya IoT Cloud Platform to ge
         * To find those again, go to [iot.tuya.com](https://iot.tuya.com/), choose your project and click `Overview`
             * API Key: Access ID/Client ID
             * API Secret: Access Secret/Client Secret
-    * It will also ask for a sample *Device ID*.  Use one from step 2 above or found in the Device List on your Tuya IoT project.
+    * It will also ask for a sample *Device ID*.  You can have the wizard scan for one (enter `scan`), use one from step 2 above or in the Device List on your Tuya IoT project.
     * The **Wizard** will poll the Tuya IoT Cloud Platform and print a JSON list of all your registered devices with the "name", "id" and "key" of your registered device(s). The "key"s in this list are the Devices' *Local_Key* you will use to access your device. 
     * In addition to displaying the list of devices, **Wizard** will create a local file `devices.json` that TinyTuya will use to provide additional details for scan results from `tinytuya.deviceScan()` or when running `python -m tinytuya scan`. The wizard also creates a local file `tuya-raw.json` that contains the entire payload from Tuya Cloud.
     * The **Wizard** will ask if you want to poll all the devices. If you do, it will display the status of all devices on record and create a `snapshot.json` file with these results. Make sure your LAN and firewall permit UDP (6666, 6667 and 7000) and TCP (6668) traffic.
@@ -113,7 +113,7 @@ import tinytuya
 # Connect to Device
 d = tinytuya.OutletDevice(
     dev_id='DEVICE_ID_HERE',
-    address='IP_ADDRESS_HERE',
+    address='IP_ADDRESS_HERE',      # Or set to 'Auto' to auto-discover IP address
     local_key='LOCAL_KEY_HERE', 
     version=3.3)
 
@@ -827,3 +827,4 @@ Please feel free to submit a PR or open an issue to add your project.
 * https://github.com/mafrosis/tinytuya2mqtt - A bridge between TinyTuya and Home Assistant via MQTT
 * https://github.com/Whytey/pymoebot - A Python library intended to monitor and control the MoeBot robotic lawn mowers.
 * https://github.com/make-all/tuya-local - Local support for Tuya devices in Home Assistant
+* https://github.com/teejo75/mtghs - Provides an HTTP service for Moonraker to control Tuya outlets.

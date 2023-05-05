@@ -87,22 +87,11 @@ except ImportError:
 # Colorama terminal color capability for all platforms
 init()
 
-version_tuple = (1, 12, 3)
+version_tuple = (1, 12, 5)
 version = __version__ = "%d.%d.%d" % version_tuple
 __author__ = "jasonacox"
 
 log = logging.getLogger(__name__)
-# Uncomment the following to set debug mode or call set_debug()
-# logging.basicConfig(level=logging.DEBUG)
-
-log.debug("%s version %s", __name__, __version__)
-log.debug("Python %s on %s", sys.version, sys.platform)
-if Crypto is None:
-    log.debug("Using pyaes version %r", pyaes.VERSION)  # pylint: disable=E0601
-    log.debug("Using pyaes from %r", pyaes.__file__)    # pylint: disable=E0601
-else:
-    log.debug("Using PyCrypto %r", Crypto.version_info)
-    log.debug("Using PyCrypto from %r", Crypto.__file__)
 
 # Globals Network Settings
 MAXCOUNT = 15       # How many tries before stopping
@@ -251,6 +240,7 @@ class AESCipher(object):
                 raise NotImplementedError( 'pyaes does not support GCM, please install PyCryptodome' )
 
             _ = self._pad(raw)
+            # pylint: disable-next=used-before-assignment
             cipher = pyaes.blockfeeder.Encrypter(
                 pyaes.AESModeOfOperationECB(self.key),
                 pyaes.PADDING_DEFAULT if pad else pyaes.PADDING_NONE
@@ -343,6 +333,12 @@ def set_debug(toggle=True, color=True):
             logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
         log.setLevel(logging.DEBUG)
         log.debug("TinyTuya [%s]\n", __version__)
+        log.debug("Python %s on %s", sys.version, sys.platform)
+        if Crypto is None:
+            # pylint: disable-next=used-before-assignment
+            log.debug("Using pyaes version %r", pyaes.VERSION)
+        else:
+            log.debug("Using PyCrypto %r", Crypto.version_info)
     else:
         log.setLevel(logging.NOTSET)
 
@@ -1812,17 +1808,14 @@ class Device(XenonDevice):
 def pad(s):
     return s + (16 - len(s) % 16) * chr(16 - len(s) % 16)
 
-
 def unpad(s):
     return s[: -ord(s[len(s) - 1 :])]
 
-
 def encrypt(msg, key):
-    return AES.new(key, AES.MODE_ECB).encrypt(pad(msg).encode())
-
+    return AESCipher( key ).encrypt( msg, use_base64=False, pad=True )
 
 def decrypt(msg, key):
-    return unpad(AES.new(key, AES.MODE_ECB).decrypt(msg)).decode()
+    return AESCipher( key ).decrypt( msg, use_base64=False, decode_text=True )
 
 #def decrypt_gcm(msg, key):
 #    nonce = msg[:12]

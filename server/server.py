@@ -1,10 +1,10 @@
-# TinyTuya Setup Wizard
+# TinyTuya API Server
 # -*- coding: utf-8 -*-
 """
 TinyTuya API Server for Tuya based WiFi smart devices
 
 Author: Jason A. Cox
-Date: June 11, 2022
+Date: June 11, 2023
 For more information see https://github.com/jasonacox/tinytuya
 
 Description
@@ -15,8 +15,8 @@ Description
         /device/{DeviceID}|{DeviceName} - List specific device metadata
         /numdevices                     - List current number of devices discovered
         /status/{DeviceID}|{DeviceName} - List current device status
-        /set/{DeviceID}|{DeviceName}/{Key}/{Value}
-                                        - Set DPS {Key} with {Value}
+        /set/{DeviceID}|{DeviceName}/{Key}|{Code}/{Value}
+                                        - Set DPS {Key} or {Code} with {Value}
         /turnon/{DeviceID}|{DeviceName}/{SwitchNo}
                                         - Turn on device, optional {SwtichNo}
         /turnoff/{DeviceID}|{DeviceName}/{SwitchNo}
@@ -37,14 +37,18 @@ import time
 import logging
 import json
 import socket
-import requests
+try:
+    import requests
+except ImportError as impErr:
+    print("WARN: Unable to import requests library, Cloud functions will not work.")
+    print("WARN: Check dependencies. See https://github.com/jasonacox/tinytuya/issues/377")
+    print("WARN: Error: {}.".format(impErr.args[0]))
 import resource
 import sys
 import os
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from socketserver import ThreadingMixIn 
-import urllib.parse
 
 # Required module: pycryptodome
 try:
@@ -63,7 +67,7 @@ except:
 
 import tinytuya
 
-BUILD = "t7"
+BUILD = "t8"
 
 # Defaults
 APIPORT = 8888
@@ -270,6 +274,11 @@ def tuyalisten(port):
     # Enable UDP listening broadcasting mode on UDP port 
     client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     client.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    try:
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    except AttributeError:
+        # SO_REUSEPORT not available
+        pass
     client.bind(("", port))
     client.settimeout(5)
 
@@ -365,14 +374,13 @@ class handler(BaseHTTPRequestHandler):
                     ("/device/{DeviceID}|{DeviceName}", "List specific device metadata"),
                     ("/numdevices", "List current number of devices discovered"),
                     ("/status/{DeviceID}|{DeviceName}", "List current device status"),
-                    ("/set/{DeviceID}|{DeviceName}/{Key}/{Value}", "Set DPS {Key} with {Value}"),
+                    ("/set/{DeviceID}|{DeviceName}/{Key}|{Code}/{Value}", "Set DPS {Key} or {Code} with {Value}"),
                     ("/turnon/{DeviceID}|{DeviceName}/{SwitchNo}", "Turn on device, optional {SwtichNo}"),
                     ("/turnoff/{DeviceID}|{DeviceName}/{SwitchNo}", "Turn off device, optional {SwtichNo}"),
                     ("/delayoff/{DeviceID}|{DeviceName}/{SwitchNo}/{Time}", "Turn off device with delay of 10 secs, optional {SwitchNo}/{Time}"),
                     ("/sync", "Fetches the device list and local keys from the Tuya Cloud API"),
                     ("/cloudconfig/{apiKey}/{apiSecret}/{apiRegion}/{apiDeviceID}", "Sets the Tuya Cloud API login info"),
                     ("/offline", "List of registered devices that are offline")]
-
             message = json.dumps(cmds)
         elif self.path == '/stats':
             # Give Internal Stats
@@ -393,20 +401,28 @@ class handler(BaseHTTPRequestHandler):
                     dpsValue = dpsValue.split('"')[1]
                 elif dpsValue.isnumeric():
                     dpsValue = int(dpsValue)
+                if(id not in deviceslist):
+                    id = getDeviceIdByName(id)
+                if not dpsKey.isnumeric():
+                    for x in tuyadevices:
+                        if x['id'] == id:
+                            if 'mapping' in x:
+                                for i in x['mapping']:
+                                    if x['mapping'][i]['code'] == str(dpsKey):
+                                        dpsKey = i
+                                        break
                 log.debug("Set dpsKey: %s dpsValue: %s" % (dpsKey,dpsValue))
+                if(id in deviceslist):
+                    d = tinytuya.OutletDevice(id, deviceslist[id]["ip"], deviceslist[id]["key"])
+                    d.set_version(float(deviceslist[id]["version"]))
+                    message = formatreturn(d.set_value(dpsKey,dpsValue,nowait=True))
+                    d.close()
+                else:
+                    message = json.dumps({"Error": "Device ID not found.", "id": id})
+                    log.debug("Device ID not found: %s" % id)
             except:
                 message = json.dumps({"Error": "Syntax error in set command URL.", "url": self.path})
                 log.debug("Syntax error in set command URL: %s" % self.path)
-            if(id not in deviceslist):
-                id = getDeviceIdByName(id)
-            if(id in deviceslist):
-                d = tinytuya.OutletDevice(id, deviceslist[id]["ip"], deviceslist[id]["key"])
-                d.set_version(float(deviceslist[id]["version"]))
-                message = formatreturn(d.set_value(dpsKey,dpsValue,nowait=True))
-                d.close()
-            else:
-                message = json.dumps({"Error": "Device ID not found.", "id": id})
-                log.debug("Device ID not found: %s" % id)
         elif self.path.startswith('/device/'):
             id = self.path.split('/device/')[1]
             if(id not in deviceslist):
@@ -514,7 +530,15 @@ class handler(BaseHTTPRequestHandler):
                 try:
                     d = tinytuya.OutletDevice(id, deviceslist[id]["ip"], deviceslist[id]["key"])
                     d.set_version(float(deviceslist[id]["version"]))
-                    message = formatreturn(d.status())
+                    response = d.status()
+                    for x in tuyadevices:
+                        if x['id'] == id:
+                            if 'mapping' in x:
+                                response["dps_mapping"] = x['mapping']
+                            else:
+                                response["dps_mapping"] = []
+                            break
+                    message = formatreturn(response)
                     d.close()
                 except:
                     message = json.dumps({"Error": "Error polling device.", "id": id})

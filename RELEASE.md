@@ -1,5 +1,104 @@
 # RELEASE NOTES
 
+## v1.12.11 - Bug Fix for _get_socket()
+
+* PyPI 1.12.11
+* Fix local variable collision in `_get_socket()` exception handling for device offline conditions.
+
+## v1.12.10 - Various Updates
+
+* PyPI 1.12.10
+* Various updates inspired by recent issues by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/397 - Updates to scanner, added error code and helpful troubleshooting messages, make connection/key errors more descriptive, added socketRetryLimit (`connection_retry_limit`) and socketRetryDelay (`connection_retry_limit`) to Device constructor args.
+* [[MQTT Gateway for Server](https://github.com/jasonacox/tinytuya/blob/master/server/mqtt/mqtt_gateway.py)] Fixed endless loop causing 100% cpu usage by @michaelmittermair in https://github.com/jasonacox/tinytuya/pull/390
+
+
+## v1.12.9 - Import Issue with urllib3
+
+* PyPI 1.12.9
+* Add graceful handling of issue where urllib3 v2.0 causes `ImportError: urllib3 v2.0 only supports OpenSSL 1.1.1+` error. See https://github.com/jasonacox/tinytuya/issues/377 & https://github.com/jasonacox/tinytuya/pull/379.
+* Fix bug in Cloud getdevices() that can error with older `devices.json` versions as raised in https://github.com/jasonacox/tinytuya/issues/381 & https://github.com/jasonacox/tinytuya/pull/382
+* [[Server](https://github.com/jasonacox/tinytuya/tree/master/server)] Mapping for DP IDs by @mschlenstedt in https://github.com/jasonacox/tinytuya/pull/353 and https://github.com/jasonacox/tinytuya/pull/363
+* [[MQTT Gateway for Server](https://github.com/jasonacox/tinytuya/blob/master/server/mqtt/mqtt_gateway.py)] by @mschlenstedt in https://github.com/jasonacox/tinytuya/pull/364, https://github.com/jasonacox/tinytuya/pull/367 and https://github.com/jasonacox/tinytuya/pull/366
+* Add Contrib support for Inverter Heat Pump such as Fairland IPHR55 by @valentindusollier in https://github.com/jasonacox/tinytuya/pull/368
+
+## v1.12.8 - Device DP Mapping
+
+* PyPI 1.12.8
+* [[Server](https://github.com/jasonacox/tinytuya/tree/master/server)] - Use {DeviceName} instead of {DeviceID} alternatively for API commands by @mschlenstedt in https://github.com/jasonacox/tinytuya/pull/352
+* Wizard - New Cloud functions to download DP Name mappings by @uzlonewolf in https://github.com/jasonacox/tinytuya/pull/356
+
+Example device from UPDATED `devices.json` showing new *"mapping"* data:
+
+```json
+    {
+        "name": "Smart Plug",
+        "id": "01234567890abcdef012",
+        "key": "abcdef0123456789",
+        "mac": "aa:bb:cc:dd:33:11",
+        "uuid": "01234567890abcdef012",
+        "category": "cz",
+        "product_name": "WP1-Smart Socket",
+        "product_id": "iXfg9AQVUPhlfyGw",
+        "biz_type": 18,
+        "model": "WP1/10A/\u5e26\u8ba1\u91cf/gosund",
+        "sub": false,
+        "icon": "https://images.tuyaus.com/smart/icon/1472009231_0.png",
+        "mapping": {
+            "1": {
+                "code": "switch",
+                "type": "Boolean",
+                "values": {}
+            },
+            "4": {
+                "code": "cur_current",
+                "type": "Integer",
+                "values": {
+                    "unit": "mA",
+                    "min": 0,
+                    "max": 30000,
+                    "scale": 0,
+                    "step": 1
+                }
+            },
+            "5": {
+                "code": "cur_power",
+                "type": "Integer",
+                "values": {
+                    "unit": "W",
+                    "min": 0,
+                    "max": 50000,
+                    "scale": 1,
+                    "step": 1
+                }
+            },
+            "6": {
+                "code": "cur_voltage",
+                "type": "Integer",
+                "values": {
+                    "unit": "V",
+                    "min": 0,
+                    "max": 5000,
+                    "scale": 1,
+                    "step": 1
+                }
+            },
+            "2": {
+                "code": "countdown_1",
+                "type": "Integer",
+                "values": {
+                    "unit": "s",
+                    "min": 0,
+                    "max": 86400,
+                    "scale": 0,
+                    "step": 1
+                }
+            }
+        },
+        "ip": "10.20.30.40",
+        "version": "3.1"
+    }
+```
+
 ## v1.12.7 - Status Bug Fix
 
 * PyPI 1.12.7

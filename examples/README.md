@@ -46,3 +46,11 @@ turn_on('Dining Room')
 ## Tuya Cloud API Examples
 
 [cloud.py](cloud.py) -  Example that uses the Tinytuya `Cloud` class and functions to access the Tuya Cloud API to pull device information and control the device via the cloud.
+
+## Multi-Threaded Example
+
+[threading.py](threading.py) - Example that uses python threading to connect to multiple devices and listen for updates.
+
+## Multiple Device Select Example
+
+[multi-select.py](multi-select.py) - Example that uses python select() to connect to multiple devices and listen for updates simultaneously. By using select(), the program avoids having to create separate threads for each device and can efficiently handle multiple device connections in a single loop.

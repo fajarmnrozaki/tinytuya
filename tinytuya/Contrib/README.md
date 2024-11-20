@@ -26,12 +26,28 @@ In addition to the built-in `OutletDevice`, `BulbDevice` and `CoverDevice` devic
 * Example: [examples/IRRemoteControlDevice-example.py](https://github.com/jasonacox/tinytuya/blob/master/examples/Contrib/IRRemoteControlDevice-example.py)
 
     ```python
-    # Example usage of community contributed device modules
+    # Example 1 -usage of community contributed device modules
     from tinytuya import Contrib
 
-    ir = Contrib.IRRemoteControlDevice( 'abcdefghijklmnop123456', '172.28.321.475', '1234567890123abc' )
+    ir = Contrib.IRRemoteControlDevice( 'abcdefghijklmnop123456', '10.2.3.4', '1234567890123abc' )
     button = ir.receive_button(timeout=15)
     ir.send_button(button)
+    ```
+
+    ```python
+    # Example 2 - Aubess WiFi IR Controller S16 for Sony TV - Issue #492
+    from tinytuya import Contrib
+
+    # Pull the Device Log from Tuya cloud while using Tuya Smart App and pressing PWR button on controller:
+    # SONY Tuya Device Debug Log: IR send{"control":"send_ir","head":"xxxx","key1":"003xxx)","type":0,"delay":300}
+    head = 'xxx'
+    key1 = '003xxx'
+
+    ir = Contrib.IRRemoteControlDevice( 'abcdefghijklmnop123456', '10.2.3.4', '1234567890123abc', persist=True )
+    ir.send_key( head, key1 )
+
+    # NOTE: If it doesn't work, try removing a leading zero from key1. Depending on what DPS set the device 
+    # uses the key1 from the debug logs could have an extra 0.
     ```
 
 ### SocketDevice
@@ -121,8 +137,54 @@ In addition to the built-in `OutletDevice`, `BulbDevice` and `CoverDevice` devic
         device.set_target_water_temp(28)
     ```
 
+### PresenceDetectorDevice
+
+* PresenceDetectorDevice - A community-contributed Python module to add support for Tuya WiFi smart presence detector device
+* Author: [Mario Antollini](https://github.com/mrioan)
+* Tested: [MmWave Human Presence Sensor](https://www.amazon.com/gp/product/B0BZCRNY14)
+
+    ```python
+    from tinytuya.Contrib import PresenceDetectorDevice
+    import time
+
+    device_id = 'XXXX'                                                                  
+    device_ip = 'YYYY'                                                                           
+    local_key = 'ZZZZ'
+
+    device = PresenceDetectorDevice.PresenceDetectorDevice(device_id, address=device_ip, local_key=local_key)
+
+    print(" >>>> Begin Monitor Loop <<<< ")
+    while(True):
+        presence = device.get_presence_state()
+        if (presence == 'presence'):
+            print('Presence detected!')
+        else:
+            print('no presence, sleep...') 
+        time.sleep(20)
+    ```
+
+### BlanketDevice
+
+* BlanketDevice - A community-contributed Python module to add support for Tuya WiFi smart electric blankets
+* Author: [Leo Denham](https://github.com/leodenham)
+* Tested: [Goldair Platinum Electric Blanket GPFAEB-Q](https://www.target.com.au/p/goldair-platinum-electric-blanket-gpfaeb-q/8300270020_white)
+
+  ```python
+  from tinytuya.Contrib import BlanketDevice
+  import time
+
+  device = BlanketDevice.BlanketDevice(dev_id="XXXX", address="Y.Y.Y.Y", local_key="ZZZZ", version=3.3)
+
+  device.turn_on()
+
+  # Heat up for 20 minutes then maintain nice temperature overnight.
+  device.set_body_level(6)
+  time.sleep(60*20)
+  device.set_body_level(2)
+  device.set_body_time(12)
+  ```
+
 ## Submit Your Device
 
 * We welcome new device modules!
 * Follow the template example in [ThermostatDevice.py](ThermostatDevice.py) to add your device.
-* Add your module to the [__init__.py](__init__.py) file.
